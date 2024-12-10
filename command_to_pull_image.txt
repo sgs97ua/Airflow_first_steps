@@ -1,0 +1,1 @@
+docker pull apache/airflow:slim-latest-python3.9
