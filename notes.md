@@ -358,5 +358,118 @@ Ejemplo:
 Definimos en el parámetro `op_kwargs`, a que clave del diccionario de argumentos debe acceder. En este caso se accede a la variable de fecha de inicio de la tarea `ds` y a la variable de la tarea del primer proceso con clave Color mediante el método `xcom_pull`. 
 
 
+### Control de excepciones
 
+Algunas de las excepciones más utilizadas son:
+
+- **AirFlowSkipException**: Utilizada para omitir tareas.
+- **AirFlowException**: Excepción que permite controlar cuando una tarea falla.
+- **AirFlowTaskTimeout**: Excepción que permite controlar cuando excede el tiempo de espera.
+
+
+``` python
+from airflow.eceptions import AirflowSkipException, AirflowException, AirflowTaskTimeout 
+```
+
+Ejemplo de lanzar una excepción de omisión de una parte del código.
+
+```python
+def execute_tasks(**kwargs):
+    params = kwargs.get('params',{})
+    manual = params.get('Manual',False)
+
+    if manual:
+        raise AirflowSkipException("Se supende la tarea porque quiero")
+
+```
+
+Al ejecutar la tarea observamos que la tarea ha sido omitida.
+
+![Airflow Skip Exception](images/AirflowSkipException.png)
+
+
+Ejemplo de lanzar una excepción error de una parte del código.
+
+```python
+def execute_tasks(**kwargs):
+    params = kwargs.get('params',{})
+    manual = params.get('Manual',False)
+
+    if manual:
+        raise AirflowException("Error al ejecutar la tarea")
+
+```
+
+
+Ejemplo de lanzar una TimeOutException.
+
+```python
+def execute_tasks(**kwargs):
+    params = kwargs.get('params',{})
+    manual = params.get('Manual',False)
+
+    if manual:
+        timeout = 10
+        start_time = time.time()
+        while True:
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout:
+                raise AirflowTaskTimeout("La tarea ha excedido el tiempo de espera especificado")
+            time.sleep(1)
+
+```
+
+![Airflow TimeOut Exception](images/TimeOutException.png)
+
+
+### Trigger Rules
+
+Las trigger rules vienen a ser las condiciones necesarias para que una tarea pueda ejecutarse dentro de un flujo de trabajo. Estas condiciones estan basadas en el estado de las tareas anteriores (upstream) en el flujo.
+
+En primer lugar, tenemos que importar el paquete TriggerRule.
+``` python
+from airflow.utils.trigger_rule import TriggerRule
+```
+
+Existen diferentes tipos de *TriggerRules*:
+- `ALL_SUCCESS`: Todas las tareas previas tienen que haber sido ejecutadas con éxito para que se actualice la información.
+
+- `ONE_SUCCESS`: La tarea se ejecuta si al menos una de las tareas anteriores ha tenido éxito.
+
+- `ALL_FAILED`: La tarea se ejecuta si al menos una de las tareas anteriores ha fallado.
+
+- `ONE_FAILED`: La tarea se ejecuta si al menos una de las tareas ha fallado.
+
+- `ALL_DONE`: La tarea se ejecuta cuando todas las tareas anteriores han terminado, sin importar que hayan tenido éxito o hallan fallado.
+
+- `NONE_FAILED`: La tarea se ejecuta si ninunga de las tareas anteriiores ha fallado.
+
+- `ALWAYS`: La tarea se ejecuta sin importar el estado de las tareas anteriores.
+
+En el caso de que configuremos un DAG de la siguiente manera.
+
+``` python
+    start_task = EmptyOperator(task_id="inicia_proceso")
+    
+    end_task = EmptyOperator(task_id="finaliza_proceso",
+                             trigger_rule=TriggerRule.ALL_SUCCESS,)
+
+    first_task = PythonOperator(task_id="primer_proceso", 
+                                python_callable=execute_tasks,
+                                retries=retries,
+                                retry_delay=retry_delay,
+                                provide_context=True)
+    
+    second_task = PythonOperator(task_id="segundo_proceso",
+                                  python_callable=second_tasks,
+                                  provide_context=True)
+
+    
+    
+    start_task >> [first_task,second_task] >> end_task
+```
+
+Estamos estableciendo que la tarea `end_task`se ejecute únicamente si las tareas `first_task,second_task` que son las tareas anteriores han sido ejecutadas de forma exitosa.
+
+Al ejecutar el DAG obtenedremos **upstream_failed**.
 
