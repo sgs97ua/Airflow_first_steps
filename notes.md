@@ -181,3 +181,182 @@ Siendo el flujo:
 3. end_task.
 
 Para poder visualizar este flujo lo podemos observar o bien esperando 5 minutos para que aparezca este nuevo flujo o bien ejecutar `docker compose restart`.
+
+
+### Configuración de dependencias entre tareas
+
+A la hora de establecer las dependencias existentes entre tareas, se puede especificar de dos maneras diferentes.
+
+- Especificando dos ramas en el que intervengan dos tareas totalmente diferentes. En el código inferiro la *end_task* depende de que haya finalizado la tarea *first_task* y *second_task* en paralelo.
+```py
+start_task >> first_task >> end_task
+start_task >> second_task >> end_task
+```
+
+![Ejemplo de flow](./images/example(1).png)
+
+- Especificando mediante una lista aquellas tareas que se tienen que ejecutar en paralelo
+```py
+start_task >> [first_task,second_task] >> end_task
+```
+
+
+Ejemplo de definición de un flujo en el que tenga diferentes actividades en paralelos.
+``` python
+    start_task >> [first_task,second_task] >> third_task
+    third_task >> [fourth_task,fifth_task] >> end_task
+```
+
+![Ejemplo flujo multiparalelo](./images/example(2).png)
+
+### Configuracion de variables de entorno
+
+Para ello tenemos que clickar en el menú `Admin > Variables`. Podemos crear las variables siguiendo una estructura **Key-Value**.
+
+Para acceder desde el DAG a las variables de entorno definidas, tenemos que importar la clase **Variables** del paquete **airflow.models**.
+``` python
+from airflow.models import Variables
+```
+Una vez importado el modulo necesario, para acceder a las variables de entorno definidas, se accede de la misma manera que se accede a un diccionario de Python.
+``` python
+ENV = Variables.get("env")
+ID = Variables.get("id")
+```
+
+
+### Ejecucion de Dataflow con parámetros.
+
+A la hora de especificar parámetros en el DataFlow, utilizamos el parámetro del constructor del objeto **DAG** denominado `params`.
+
+```python
+dag = DAG(
+    DAG_ID,
+    default_args=default_args,
+    description=DAG_DESCRIPTION,
+    catchup=False,
+    schedule_interval=DAG_SCHEDULE,
+    max_active_runs=1,
+    dagrun_timeout=timedelta(minutes=60),
+    tags=TAGS,
+    params={'Manual':True}
+)
+```
+
+Establecer el parámetro `Manual:True` hace que al ejecutar de forma manual el DAG en la aplicación, se nos dirija a una página en la que podemos modificar los parámetros de ejecución, también se puede asignar un DAG_ID específico, pudiendo cambiar la fecha lógica de la ejecución.
+
+![Página de configuración de parámetros](images/configuracion_parametros_dag.png)
+
+Para añadir más parámetros, se añaden nuevos pares *clave-valor* en el constructor del DAG en el parámetro **params**. En el ejemplo, se ha añadido un parámetro fecha en el que se incluye la fecha de hoy.
+
+``` python
+dag = DAG(
+    DAG_ID,
+    default_args=default_args,
+    description=DAG_DESCRIPTION,
+    catchup=False,
+    schedule_interval=DAG_SCHEDULE,
+    max_active_runs=1,
+    dagrun_timeout=timedelta(minutes=60),
+    tags=TAGS,
+    params={'Manual':True,'Fecha':datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+)
+
+```
+
+Al ejecutar el DAG con estos parámetros, observamos que nos devuleve los valores de los parámetros que hemos configurado en el apartado *Run Config*.
+
+![Parámetros devuletos tras la ejecución](images/param_result_ejecucion.png)
+
+
+> **BUENA PRÁCTICA**: No definir directamente los parámetros dentro del constructor del DAG, mejor definir un diccionario fuera y pasasrselo como parámetro.
+
+
+### Usando Contexto de las Tareas en Airflow
+
+El contexto es la información y variables que son pasadas a las tareas durante la ejecución de un DAG. Generalmente el contexto inlcuye información como fecha de ejecución, identificador de la tarea, estado de la tarea, etc.
+
+El contexto es muy importante ya que permite acceder a la información de manera relevante y dinámica, lo que facilita la personalización y control de ejecución de cada tarea.
+
+
+Para acceder al contexto en un **PythonOperator** se establece en primer lugar el parámetro `provide_context=True`.
+
+```
+first_task = PythonOperator(task_id="primer_proceso",               
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+```
+
+Posteriormente en el **python_callable** se agrega el parámetro `**kwargs`.
+Este parámetro, es un diccionario con gran cantidad de información. Para ver el funcionamiento utilizamos el siguiente código.
+
+```py
+def execute_tasks(**kwargs):
+    params = kwargs.get('params',{})
+    manual = params.get('Manual',False)
+
+    if manual:
+        kwargs['ti'].xcom_push(key='Color', value='Amarillo')
+    else:
+        kwargs['ti'].xcom_push(key='Color', value='Azul')
+```
+
+1. Se obtienen los parámetros.
+2. Se obtiene el parámetro `Manual`.
+3. En función del valor `Manual` se añade a los parámetros de la instancia de la tarea que se esta ejecutando un valor diferente de *Color*. Esto se hace accediendo a `kwargs['ti']` y invocando el método `xcom_push`
+
+
+En caso de que se quiera acceder al contexto en el siguiente operador, tendremos que acceder de nuevo a `kwargs['ti']` e invocar el método `xcom_pull(key='<KEY>', task_ids='<ID TAREA>')` para obtener el valor.
+
+```
+
+def context_task(**kwargs):
+    ti = kwargs['ti']
+    color = ti.xcom_pull(key='Color', task_ids='primer_proceso')
+    print(f"El color es: {color}")
+
+```
+
+
+### Variables importantes del contexto.
+
+* `ds`: Fecha de inicio de la ejecución de la tarea. Pero en formato con separación. Ejemplo: *2024-04-29*
+* `ds_nodash`: Igual que `ds` pero sin separadores en la fecha. Ejemplo: *20240429*
+* `next_execution_date`: Fecha de la próxima ejecución automática. En formato *DateTime*
+* `prev_execution_date`: Fecha de la ejecución anterior. En formato *DateTime*.
+* `prev_execution_date_success`: Fecha de la anterior ejecución automática exitosa.
+* `tomorrow_ds`: Día después de la ejecución de la tarea.
+* `yesterday_ds`: Un día antes de la ejecución de la tarea.
+
+
+#### Operadores sin funcionalidad de provided context
+Existen operadores que no reciben la funcionalidad de provided context, pero si reciben parámetros, podemos hacer uso de estos parámetros especificandolo de esta manera `op_kawrgs={'ds':'{{ds}}'}`, de esta manera se accede de forma más rápida a los valores del contexto.
+
+Ejemplo:
+``` python
+    def execute_tasks(**kwargs):
+    params = kwargs.get('params',{})
+    manual = params.get('Manual',False)
+
+    if manual:
+        kwargs['ti'].xcom_push(key='Color', value='Amarillo')
+    else:
+        kwargs['ti'].xcom_push(key='Color', value='Azul')
+
+
+
+    second_task = PythonOperator(task_id="segundo_proceso",
+                                  python_callable=context_task,
+                                  retries=retries,
+                                  retry_delay=retry_delay,
+                                  op_kwargs={'ds':'{{ds}}',
+                                            'color':'{{ti.xcom_pull(task_ids="primer_proceso", key="Color")}}'}) 
+    
+```
+
+Definimos en el parámetro `op_kwargs`, a que clave del diccionario de argumentos debe acceder. En este caso se accede a la variable de fecha de inicio de la tarea `ds` y a la variable de la tarea del primer proceso con clave Color mediante el método `xcom_pull`. 
+
+
+
+
