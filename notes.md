@@ -661,3 +661,25 @@ En **Apache Airflow** cada DAG dispone de un parámetro *shedule_interval* en el
 
 > CRON nos permite también especificar expresiones del tipo: ejecuciones cada 15 minutos el fin de semana `/15 * * * 6, 7`
 
+
+## Conexiones con AirFlow
+
+*Apache Airflow* ofrece una variedad de conexiones preconfiguradas que facilitan al integración distintos sistemas y servicios, lo que es crucial para la gestión de datos y la ejecución eficiente de flujos de trabajao.
+
+- **Conexiones a Base de Datos**: *MySQL, PostgreSQL, SQLite*.
+- **Conexiones a servicios de la nube**: *AWS, Google Cloud, Azure*.
+- **Conexiones a servicios de mensajería**: *Kafka, RabbitMQ*.
+- **Otras conexiones comunes**: *SSH,FTP,SFTP, Docker, ElasticSearch*.
+
+
+Estas conexiones son gestionadas a trabés del portal web en [http://localhost:8080]('http://localhost:8080'), en la barra de menú, `Admin -> Connections`. 
+
+Se clicka el botón con el símbolo '+' y posteriormente se configura la nueva conexión.
+
+
+![Página de configuración de conexiones](/images/new_connections.png)
+
+
+![Configuración de nuevas conexiones](/images/conf_new_connections.png)
+
+
