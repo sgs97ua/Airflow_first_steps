@@ -48,7 +48,7 @@ with dag as dag:
     start_task = EmptyOperator(task_id="inicia_proceso")
     
     end_task = EmptyOperator(task_id="finaliza_proceso",
-                             trigger_rule=TriggerRule.NONE_FAILED,)
+                             trigger_rule=TriggerRule.ONE_SUCCESS,)
 
     first_task = PythonOperator(task_id="primer_proceso", 
                                 python_callable=execute_tasks,

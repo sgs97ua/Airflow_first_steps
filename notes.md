@@ -583,3 +583,81 @@ second_task = PythonOperator(task_id="segundo_proceso",
                                 python_callable=second_tasks,
                                 provide_context=True)
 ```
+
+
+### Creación de tareas usando bucles
+
+En este apartado se va a ver como crear tareas utilizando bucles para disponer de una mayor mantenibilidad de código.
+
+1. Se define un diccionario en el que contendrá un registro por cada tarea y un mensaje específico por cada una de ellas.
+
+```python
+tablas_info = {
+    1:{"message":"Soy la tarea 1"},
+    2:{"message":"Soy la tarea 2"}
+    3:{"message":"Soy la tarea 3"}
+    4:{"message":"Soy la tarea 4"}
+}
+```
+
+2. Definición de un método *clousure* que imprima ese mensaje por cada tarea.
+
+```python
+def create_task(message):
+    def task_callable():
+        print(message)
+    return task_callable
+
+```
+
+3. Definir un bucle for, que recorra todos los registros del diccionario y guarde en la variable message el mensaje que se imprimirá en la tarea. Posteriormente se define un *PythonOperator* que invocará el método y el *task_id* que se asigna será genérico. Luego se irán concatenando las tareas mediante las variables `previous_task` y `python_task`
+
+```python
+    start = EmptyOperator(task_id='start')
+    end = EmptyOperator(task_id='end')
+
+    previous_task = start
+    for tabla, info in tablas_info.items()
+        message = info.get('message')
+        python_task = PythonOperator(
+            task_id=f"python_task{tabla}",
+            python_callable=create_task(message),
+            pool="My_pool",
+        )
+
+        previous_task >> python_task
+        previous_task = python_task
+
+    python_task >> end
+```
+
+
+## Expresiones CRON
+
+Las expresiones **Cron** son una forma de especificar programaciones para tareas automatizadas en sistemas Unix y similares. Utilizan una sintaxis especifica para definir cuando las tareas tienen que ejecutarse.
+
+Una expresión **Cron** se divide en.
+
+1. Minuto (0-59).
+2. Hora (0-23).
+3. Día del mes (1-31).
+4. Mes (1-12). *También se puede especificar el nombre de los meses*
+5. Día de la semana (0-7, donde 0 y 7 representan el domingo).
+
+> Ejemplo: `0 5 * * *` Significa que se ejecuta todos los días a las 5:00 AM.
+
+
+En **Apache Airflow** cada DAG dispone de un parámetro *shedule_interval* en el que se especifica cuando se ejecutará. Puede tener diferentes valores:
+
+- `None`: Cuando queremos ejecutar el flow de forma manual.
+- *Pre-set settings*: proporcionan una serie de programaciones predefinidas.
+* `@once`: Ejecuta la tarea una sola vez.
+* `@hourly`: Ejecuta la tara una vez cada hora.
+* `@daily` : Ejecuta la tarea una vez al día de medianoche.
+* `@weekly` : Ejecuta la tarea una vez a la semana, a medianoche del domingo.
+* `@monthly`: Ejecuta la tarea una vez al mes, a medianoche del primer dia del mes.
+* `@yearly`: Ejecuta la tarea una vez al año, a medianoche del 1 de enero.
+
+
+> CRON nos permite también especificar expresiones del tipo: ejecuciones cada 15 minutos el fin de semana `/15 * * * 6, 7`
+
