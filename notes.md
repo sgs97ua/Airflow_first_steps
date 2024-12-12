@@ -682,4 +682,124 @@ Se clicka el botón con el símbolo '+' y posteriormente se configura la nueva c
 
 ![Configuración de nuevas conexiones](/images/conf_new_connections.png)
 
+### Ejemplo de conexión a base de datos POSTGRESQL
+
+En primer lugar, configuramos la conexión a la base de datos Postgres. En este caso, utilizamos la base de datos que se monta con el contenedor de Apache Airflow.
+![Creacion conexión con base de datos postrgres](/images/connection_creation.png)
+
+
+Una vez creada la conexión a la base de datos desde *Apache Airflow*, *PostgresSql* dispone de sus propios Operadores para gestionar la conexión, que son importados de la siguiente manera:
+
+``` python
+from airflow.providers.postgres.operators.postgres import PostgresOperator
+```
+
+El proceso de creación del **DAG** es similar a como hemos visto anteriormente. Lo que varía es la creación del operador que en este caso es propio de Postgres. En el se especifican los siguiente parámetros.
+
+- `task_id`: Para identificar el nodo del grafo de la tarea que vamos a construir.
+- `postgres_conn_id`: Identificador definido previamente en la interfaz web de airflow en el que especificamos los parámetros de conexión.
+
+- `sql`: Sentencia que se va a ejecutar en la base de datos.
+
+
+En el siguiente ejemplo, se ejecutan dos tipos de consultas.
+1. Se crea la tabla.
+2. Se introducen datos en la tabla.
+
+``` py
+create_table = PostgresOperator(
+        task_id='create_table',
+        postgres_conn_id='POSTGRES_CONNECTION',
+        sql="""
+        CREATE TABLE IF NOT EXISTS example_table (
+            id SERIAL PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        """
+    )
+
+insert_data = PostgresOperator(
+    task_id='insert_data',
+    postgres_conn_id='POSTGRES_CONNECTION',
+    sql="""
+        INSERT INTO example_table (value) VALUES ('Hello, world!');
+    """
+)
+```
+
+Para invocar el DAG se sigue el mismo procedimiento. Otra cosa a comentar, es que también se pueden pasar resultado de consultas utilizando los kwargs producidos por el operador de PostrgreSQL.
+
+Por ejemplo, en el siguiente fragmento de código, hemos definido un método que se ejecutará en un **PythonOperator** para acceder a los resultados producidos por una select de un **PostgresOpserator** 
+
+```python
+## QUERY RESULTS
+
+def print_query_result(**kwargs):
+    ti = kwargs['ti']
+    query_results = ti.xcom_pull(task_ids='select_table')
+    for row in query_results:
+        print(row)
+
+## OPERATORS
+    
+select_table = PostgresOperator(
+    task_id='select_table',
+    postgres_conn_id='POSTGRES_CONNECTION',
+    sql="""
+    SELECT * FROM example_table;
+    """
+)
+
+print_results = PythonOperator(
+    task_id='print_results',
+    python_callable=print_query_result,
+
+)
+
+select_table >> print_results
+
+```
+
+
+### Ejemplo de consumo de servicios web con apache Airflow.
+
+Utilizaremos la API [{JSON} Placeholder](https://jsonplaceholder.typicode.com/), que nos proporciona *data dummy* en formato *JSON*. 
+
+Para poder acceder a la conexión, en primer lugar tenemos que crear en el portal de apache airflow una conexión del tipo **HTTP**.
+
+
+![Creacion conexion HTTP para consumir API](/images/conexion_api_airflow.png)
+
+
+
+Para consumir este tipo de operación existe una operador en ApacheAirflow que nos permite consumir de una API `SimpleHttpOperator`.
+
+```python
+from airflow.providers.http.operators.http import SimpleHttpOperator
+```
+
+La configuración que hay que realizar en este operador, siendo los parámetros que lo componen los siguientes:
+- `task_id`: el identificador que vamos a utilizar para esa tarea
+- `method`: método HTTP de la petición que vamos a realizar.
+- `http_conn_id`: Identificador de la conexión HTTP que hemos definido en Apache Airflow.
+- `endpoint`: El recurso del servicio web al que se va a realizar la petición.
+- `log_response`: Parámetro que especificamos si queremos visualizar en los logs la respuesta de la API.
+- `headers`: cabecera headers de la petciión HTTP.
+- `data`: Parámetros  que se envian en la petición.
+
+
+```python
+http = SimpleHttpOperator(
+    task_id="http_petition",
+    method="GET",
+    http_conn_id="JsonPlaceHolder",
+    endpoint="posts",
+    log_response=True,
+    headers={"Content-Type": "application/json"},
+    data={"id":"4"}
+    
+)
+```
+
+
 
