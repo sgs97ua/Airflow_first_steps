@@ -442,11 +442,12 @@ Existen diferentes tipos de *TriggerRules*:
 
 - `ALL_DONE`: La tarea se ejecuta cuando todas las tareas anteriores han terminado, sin importar que hayan tenido éxito o hallan fallado.
 
-- `NONE_FAILED`: La tarea se ejecuta si ninunga de las tareas anteriiores ha fallado.
+- `NONE_FAILED`: La tarea se ejecuta si ninguna de las tareas anteriores ha fallado.
 
 - `ALWAYS`: La tarea se ejecuta sin importar el estado de las tareas anteriores.
 
-En el caso de que configuremos un DAG de la siguiente manera.
+**Ejemplo 1**: tarea `end_task`se ejecute únicamente si las tareas `first_task,second_task` que son las tareas anteriores han sido ejecutadas de forma exitosa.
+Al ejecutar el DAG obtenedremos **upstream_failed**.
 
 ``` python
     start_task = EmptyOperator(task_id="inicia_proceso")
@@ -469,7 +470,116 @@ En el caso de que configuremos un DAG de la siguiente manera.
     start_task >> [first_task,second_task] >> end_task
 ```
 
-Estamos estableciendo que la tarea `end_task`se ejecute únicamente si las tareas `first_task,second_task` que son las tareas anteriores han sido ejecutadas de forma exitosa.
 
-Al ejecutar el DAG obtenedremos **upstream_failed**.
+**Ejemplo 2**: tarea `end_task` es ejecutada siempre y cuando una de las tareas previas ejecutadas en paralelo `first_task` y `second_task` se realice de forma exitosa
 
+Al ejecutar el DAG obtendremos un estado de **Success**.
+
+```python
+start_task = EmptyOperator(task_id="inicia_proceso")
+    
+end_task = EmptyOperator(task_id="finaliza_proceso",
+                            trigger_rule=TriggerRule.ONE_SUCCESS,)
+
+first_task = PythonOperator(task_id="primer_proceso", 
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+
+second_task = PythonOperator(task_id="segundo_proceso",
+                                python_callable=second_tasks,
+                                provide_context=True)
+
+```
+
+**Ejemplo 3**: tarea `all_failed` es ejecutada siempre que las tareas previas ejectuadas en paralelo `first_task`y `second_task`  den error al ejecutarse.
+
+> En este caso, para comprobar este caso modificamos el código para que ambas tareas lancen un AirflowException.
+
+Al ejecutar el DAG obtenemos un estado de **success** en *end_task*, pese a que las tareas *first_task* y *second_task* tengan un estado failed.
+
+
+
+```python
+start_task = EmptyOperator(task_id="inicia_proceso")
+    
+end_task = EmptyOperator(task_id="finaliza_proceso",
+                            trigger_rule=TriggerRule.ALL_FAILED,)
+
+first_task = PythonOperator(task_id="primer_proceso", 
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+
+second_task = PythonOperator(task_id="segundo_proceso",
+                                python_callable=second_tasks,
+                                provide_context=True)
+
+```
+
+
+**Ejemplo 4**: tarea con trigger `one_failed` se ejecuta cuando al menos una de las tareas previas ha fallado al ejecutar.
+
+```python
+start_task = EmptyOperator(task_id="inicia_proceso")
+    
+end_task = EmptyOperator(task_id="finaliza_proceso",
+                            trigger_rule=TriggerRule.ONE_FAILED,)
+
+first_task = PythonOperator(task_id="primer_proceso", 
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+
+second_task = PythonOperator(task_id="segundo_proceso",
+                                python_callable=second_tasks,
+                                provide_context=True)
+
+```
+
+**Ejemplo 5**: tarea con trigger `ALL_DONE` tarea se ejecuta cuando todas las tareas previas han sido ejecutada independientemente de si han sido un éxito o no.
+
+Al ejecutar el DAG obtenemos un estado de **success** en *end_task*, pese a que las tareas *first_task* tenga un estado failed y *second_task* tenga un estado  success, ya que, han finalizado su proceso de una o otra manera.
+
+```python
+start_task = EmptyOperator(task_id="inicia_proceso")
+    
+end_task = EmptyOperator(task_id="finaliza_proceso",
+                            trigger_rule=TriggerRule.ALL_DONE,)
+
+first_task = PythonOperator(task_id="primer_proceso", 
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+
+second_task = PythonOperator(task_id="segundo_proceso",
+                                python_callable=second_tasks,
+                                provide_context=True)
+```
+
+
+**Ejemplo 6**: tarea con trigger `NONE_FAILED` funciona de una forma muy similar a la regla  `ALL SUCCESS`, en este caso, se ejecuta cuando ninguna de las tareas previas ha finalizado con estado *failed*, es decir, que puede estar con estado *ommitted* o *success**. 
+
+
+Al ejecutar el DAG obtenemos un estado de **upstream_failed**, esto se debe a que la tarea `first_task` ha fallado. Al forzar que no falle la tarea, obtenemos un estado **success**.
+
+```python
+start_task = EmptyOperator(task_id="inicia_proceso")
+    
+end_task = EmptyOperator(task_id="finaliza_proceso",
+                            trigger_rule=TriggerRule.NONE_FAILED,)
+
+first_task = PythonOperator(task_id="primer_proceso", 
+                            python_callable=execute_tasks,
+                            retries=retries,
+                            retry_delay=retry_delay,
+                            provide_context=True)
+
+second_task = PythonOperator(task_id="segundo_proceso",
+                                python_callable=second_tasks,
+                                provide_context=True)
+```
